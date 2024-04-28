@@ -14,9 +14,10 @@ mod switch;
 #[allow(clippy::module_inception)]
 mod task;
 
-use crate::config::MAX_APP_NUM;
+use crate::config::{MAX_APP_NUM, MAX_SYSCALL_NUM};
 use crate::loader::{get_num_app, init_app_cx};
 use crate::sync::UPSafeCell;
+use crate::timer::get_time_us;
 use lazy_static::*;
 use switch::__switch;
 pub use task::{TaskControlBlock, TaskStatus};
@@ -54,6 +55,8 @@ lazy_static! {
         let mut tasks = [TaskControlBlock {
             task_cx: TaskContext::zero_init(),
             task_status: TaskStatus::UnInit,
+            syscall_times:[0;MAX_SYSCALL_NUM],
+            start_time:0, //这里记为0是个标志位 第一次调度的时候发现是0 随后用当前时间替换掉 如果不为0就不再变化(代表当前时间)
         }; MAX_APP_NUM];
         for (i, task) in tasks.iter_mut().enumerate() {
             task.task_cx = TaskContext::goto_restore(init_app_cx(i));
@@ -80,6 +83,9 @@ impl TaskManager {
         let mut inner = self.inner.exclusive_access();
         let task0 = &mut inner.tasks[0];
         task0.task_status = TaskStatus::Running;
+        if task0.start_time == 0{
+            task0.start_time = get_time_us();
+        }
         let next_task_cx_ptr = &task0.task_cx as *const TaskContext;
         drop(inner);
         let mut _unused = TaskContext::zero_init();
@@ -122,6 +128,9 @@ impl TaskManager {
             let mut inner = self.inner.exclusive_access();
             let current = inner.current_task;
             inner.tasks[next].task_status = TaskStatus::Running;
+            if inner.tasks[next].start_time == 0{
+                inner.tasks[next].start_time = get_time_us();//当调度下一个任务时，为其提供时间
+            }
             inner.current_task = next;
             let current_task_cx_ptr = &mut inner.tasks[current].task_cx as *mut TaskContext;
             let next_task_cx_ptr = &inner.tasks[next].task_cx as *const TaskContext;
@@ -134,6 +143,30 @@ impl TaskManager {
         } else {
             panic!("All applications completed!");
         }
+    }
+
+    fn get_current_taskcontrolblock_start_time(&self) -> usize{
+        let inner = self.inner.exclusive_access();
+        let current = inner.current_task;
+        inner.tasks[current].start_time
+    }
+
+    fn get_current_taskcontrolblock_status(&self) -> TaskStatus{
+        let inner = self.inner.exclusive_access();
+        let current = inner.current_task;
+        inner.tasks[current].task_status
+    }
+
+    fn add_syscall_times(&self,syscall_id:usize){
+        let mut inner = self.inner.exclusive_access();
+        let current = inner.current_task;
+        inner.tasks[current].syscall_times[syscall_id] += 1;
+    }
+
+    fn get_syscall_times(&self) -> [u32;500]{
+        let inner = self.inner.exclusive_access();
+        let current = inner.current_task;
+        inner.tasks[current].syscall_times
     }
 }
 
@@ -168,4 +201,24 @@ pub fn suspend_current_and_run_next() {
 pub fn exit_current_and_run_next() {
     mark_current_exited();
     run_next_task();
+}
+
+///获得当前任务的起始时间
+pub fn get_current_start_time() -> usize{
+    TASK_MANAGER.get_current_taskcontrolblock_start_time()
+}
+
+///获得当前任务的状态
+pub fn get_current_taskcontrolblock_status() -> TaskStatus{
+    TASK_MANAGER.get_current_taskcontrolblock_status()
+}
+
+/// 发生特定的系统调用 为其增加一次计数
+pub fn add_syscall_times(syscall_id:usize) {
+    TASK_MANAGER.add_syscall_times(syscall_id);
+}
+
+/// 获取特定的系统调用次数
+pub fn get_syscall_times() -> [u32;500] {
+    TASK_MANAGER.get_syscall_times()
 }
