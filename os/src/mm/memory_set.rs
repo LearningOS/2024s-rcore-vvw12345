@@ -73,6 +73,8 @@ impl MemorySet {
                 }
             }
         }
+        // 缺失物理内存空间不足检查的逻辑
+
         let mut map_prem = MapPermission::U;
         if (port & 1)!=0{
             map_prem|=MapPermission::R;
@@ -103,6 +105,17 @@ impl MemorySet {
             }
         }
         0
+    }
+
+    ///计算已经分配的物理内存大小
+    fn _allocated_memory_size(&self) -> usize{
+        let mut size = 0;
+        for area in &self.areas{
+            if let MapType::Framed =  area.map_type{ //只有Framed类型会占据物理内存的大小 Idential是内核的
+                size += area.data_frames.len() * PAGE_SIZE
+            }
+        }
+        size
     }
 
     fn push(&mut self, mut map_area: MapArea, data: Option<&[u8]>) {
