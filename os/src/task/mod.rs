@@ -16,6 +16,7 @@ mod task;
 
 use crate::loader::{get_app_data, get_num_app};
 use crate::sync::UPSafeCell;
+use crate::timer::get_time_us;
 use crate::trap::TrapContext;
 use alloc::vec::Vec;
 use lazy_static::*;
@@ -79,6 +80,9 @@ impl TaskManager {
         let mut inner = self.inner.exclusive_access();
         let next_task = &mut inner.tasks[0];
         next_task.task_status = TaskStatus::Running;
+        if next_task.start_time == 0{
+            next_task.start_time = get_time_us();
+        }
         let next_task_cx_ptr = &next_task.task_cx as *const TaskContext;
         drop(inner);
         let mut _unused = TaskContext::zero_init();
@@ -126,6 +130,33 @@ impl TaskManager {
         inner.tasks[inner.current_task].get_trap_cx()
     }
 
+    ///以下4个函数为Lab4添加的 用于给TaskInfo提供信息
+    /// Get the current task status
+    fn get_current_taskcontrolblock_status(&self) -> TaskStatus{
+        let inner = self.inner.exclusive_access();
+        let current = inner.current_task;
+        inner.tasks[current].task_status
+    }
+
+    /// Get the running tasks start time
+    fn get_current_taskcontrolblock_start_time(&self) -> usize{
+        let inner = self.inner.exclusive_access();
+        let current = inner.current_task;
+        inner.tasks[current].start_time
+    }
+
+    fn add_syscall_times(&self,syscall_id:usize){
+        let mut inner = self.inner.exclusive_access();
+        let current = inner.current_task;
+        inner.tasks[current].syscall_times[syscall_id] += 1;
+    }
+
+    fn get_syscall_times(&self) -> [u32;500]{
+        let inner = self.inner.exclusive_access();
+        let current = inner.current_task;
+        inner.tasks[current].syscall_times
+    }
+
     /// Change the current 'Running' task's program break
     pub fn change_current_program_brk(&self, size: i32) -> Option<usize> {
         let mut inner = self.inner.exclusive_access();
@@ -140,6 +171,9 @@ impl TaskManager {
             let mut inner = self.inner.exclusive_access();
             let current = inner.current_task;
             inner.tasks[next].task_status = TaskStatus::Running;
+            if inner.tasks[next].start_time == 0{
+                inner.tasks[next].start_time = get_time_us();//当调度下一个任务时，为其提供时间
+            }
             inner.current_task = next;
             let current_task_cx_ptr = &mut inner.tasks[current].task_cx as *mut TaskContext;
             let next_task_cx_ptr = &inner.tasks[next].task_cx as *const TaskContext;
@@ -201,4 +235,24 @@ pub fn current_trap_cx() -> &'static mut TrapContext {
 /// Change the current 'Running' task's program break
 pub fn change_program_brk(size: i32) -> Option<usize> {
     TASK_MANAGER.change_current_program_brk(size)
+}
+
+///获得当前任务的起始时间
+pub fn get_current_start_time() -> usize{
+    TASK_MANAGER.get_current_taskcontrolblock_start_time()
+}
+
+///获得当前任务的状态
+pub fn get_current_taskcontrolblock_status() -> TaskStatus{
+    TASK_MANAGER.get_current_taskcontrolblock_status()
+}
+
+/// 发生特定的系统调用 为其增加一次计数
+pub fn add_syscall_times(syscall_id:usize){
+    TASK_MANAGER.add_syscall_times(syscall_id);
+}
+
+/// 获取特定的系统调用次数
+pub fn get_syscall_times() -> [u32;500]{
+    TASK_MANAGER.get_syscall_times()
 }
