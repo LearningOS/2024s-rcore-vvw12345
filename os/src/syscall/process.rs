@@ -1,7 +1,7 @@
 //! Process management syscalls
 use crate::{
-    config::{MAX_SYSCALL_NUM, PAGE_SIZE}, mm::{translated_physical_address, KERNEL_SPACE}, task::{
-        change_program_brk, current_user_token, exit_current_and_run_next, get_current_start_time, get_current_taskcontrolblock_status, get_syscall_times, suspend_current_and_run_next, TaskStatus
+    config::{MAX_SYSCALL_NUM, PAGE_SIZE}, mm::translated_physical_address, task::{
+        change_program_brk, current_user_token, exit_current_and_run_next, get_current_start_time, get_current_taskcontrolblock_status, get_syscall_times, mmap_current_task, munmap_current_task, suspend_current_and_run_next, TaskStatus
     }, timer::get_time_us
 };
 
@@ -83,20 +83,31 @@ pub fn sys_mmap(start: usize, len: usize, port: usize) -> isize {
         return -1;
     }
     // 检查以下的内存是否具有意义
-    if port & 0x7 == 0{
+    if !port & 0x7 == 7{
         return -1;
     }
     // 通过参数检查 调用实现的mmap方法为其分配空间
-    // 获取内核实例 取得所有权完成分配
-    KERNEL_SPACE.exclusive_access().mmap(start, len, port);
-    0
+    //println!("pass the check\n");
+    // 获取内核实例 取得所有权完成分配(这样不对 你并没有找到实际你要分配的位置) 实际上你是给内核多次分配了 所以才这样子报错
+    //let num = KERNEL_SPACE.exclusive_access().mmap(start, len, port);
+
+    //问题在于如何获得当前应用空间所在的MemorySet
+    //妈的 找到了 在TCB里面有 byd受不了了
+    //最好的方式其实还是在TCB里面把地址空间映射了 然后再封装出来
+    let num = mmap_current_task(start, len, port);
+    //let map_area = MapArea::new(start_va, end_va, MapType::Framed, map_perm);
+    //let num = map_area.exclusive_access().mmap(start, len, port);
+    num
 }
 
 // YOUR JOB: Implement munmap.
 pub fn sys_munmap(start: usize, len: usize) -> isize {
     trace!("kernel: sys_munmap NOT IMPLEMENTED YET!");
-    KERNEL_SPACE.exclusive_access().munmap(start, len);
-    0
+    if start % PAGE_SIZE != 0{
+        return -1;
+    }
+    let num = munmap_current_task(start, len);
+    num
 }
 /// change data segment size
 pub fn sys_sbrk(size: i32) -> isize {

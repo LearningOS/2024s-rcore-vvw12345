@@ -157,6 +157,22 @@ impl TaskManager {
         inner.tasks[current].syscall_times
     }
 
+    /// 为当前地址空间完成内存映射
+    pub fn mmap_current_task(&self, start: usize, len: usize, port: usize) -> isize {
+        let mut inner = self.inner.exclusive_access();
+        let current = inner.current_task;
+        let memory_set = &mut inner.tasks[current].memory_set;
+        memory_set.mmap(start, len, port)
+    }
+
+    /// 为当前地址空间解映射
+    pub fn munmap_current_task(&self,start: usize,len: usize) -> isize{
+        let mut inner = self.inner.exclusive_access();
+        let current = inner.current_task;
+        let memory_set = &mut inner.tasks[current].memory_set;
+        memory_set.munmap(start, len)
+    }
+
     /// Change the current 'Running' task's program break
     pub fn change_current_program_brk(&self, size: i32) -> Option<usize> {
         let mut inner = self.inner.exclusive_access();
@@ -255,4 +271,14 @@ pub fn add_syscall_times(syscall_id:usize){
 /// 获取特定的系统调用次数
 pub fn get_syscall_times() -> [u32;500]{
     TASK_MANAGER.get_syscall_times()
+}
+
+/// 为当前地址空间完成地址映射
+pub fn mmap_current_task(start: usize,len: usize,port: usize) -> isize{
+    TASK_MANAGER.mmap_current_task(start, len, port)
+}
+
+/// 为当前地址空间解开地址映射
+pub fn munmap_current_task(start: usize,len: usize) -> isize{
+    TASK_MANAGER.munmap_current_task(start, len)
 }
