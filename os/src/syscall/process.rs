@@ -93,9 +93,10 @@ pub fn sys_mmap(start: usize, len: usize, port: usize) -> isize {
 }
 
 // YOUR JOB: Implement munmap.
-pub fn sys_munmap(_start: usize, _len: usize) -> isize {
+pub fn sys_munmap(start: usize, len: usize) -> isize {
     trace!("kernel: sys_munmap NOT IMPLEMENTED YET!");
-    -1
+    KERNEL_SPACE.exclusive_access().munmap(start, len);
+    0
 }
 /// change data segment size
 pub fn sys_sbrk(size: i32) -> isize {
