@@ -1,9 +1,10 @@
 //! Types related to task management & Functions for completely changing TCB
 use super::TaskContext;
 use super::{kstack_alloc, pid_alloc, KernelStack, PidHandle};
-use crate::config::TRAP_CONTEXT_BASE;
+use crate::config::{MAX_SYSCALL_NUM, TRAP_CONTEXT_BASE};
 use crate::mm::{MemorySet, PhysPageNum, VirtAddr, KERNEL_SPACE};
 use crate::sync::UPSafeCell;
+use crate::timer::get_time_us;
 use crate::trap::{trap_handler, TrapContext};
 use alloc::sync::{Arc, Weak};
 use alloc::vec::Vec;
@@ -68,6 +69,13 @@ pub struct TaskControlBlockInner {
 
     /// Program break
     pub program_brk: usize,
+
+    /// 以下信息为LAB5添加
+    /// 进程开始时间
+    pub start_time:usize,
+
+    /// 系统调用次数
+    pub syscall_times:[u32;MAX_SYSCALL_NUM],
 }
 
 impl TaskControlBlockInner {
@@ -118,6 +126,8 @@ impl TaskControlBlock {
                     exit_code: 0,
                     heap_bottom: user_sp,
                     program_brk: user_sp,
+                    start_time:0,
+                    syscall_times:[0;MAX_SYSCALL_NUM],
                 })
             },
         };
@@ -191,6 +201,10 @@ impl TaskControlBlock {
                     exit_code: 0,
                     heap_bottom: parent_inner.heap_bottom,
                     program_brk: parent_inner.program_brk,
+                    // fork()的话记得从父进程那里把start_time和syscall_times继承下来
+                    // 更新：明显不应该继承 不知道之前怎么想的
+                    start_time:get_time_us() / 1000,
+                    syscall_times:[0;MAX_SYSCALL_NUM]
                 })
             },
         });

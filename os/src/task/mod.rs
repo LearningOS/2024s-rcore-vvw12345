@@ -32,8 +32,8 @@ pub use context::TaskContext;
 pub use id::{kstack_alloc, pid_alloc, KernelStack, PidHandle};
 pub use manager::add_task;
 pub use processor::{
-    current_task, current_trap_cx, current_user_token, run_tasks, schedule, take_current_task,
-    Processor,
+    current_task, current_trap_cx, current_user_token, run_tasks, schedule, take_current_task,current_tranlated_physical_address,current_task_start_time,
+    current_task_syscall_times,current_task_status,mmap_current_task,munmap_current_task,add_syscall_times,Processor,
 };
 /// Suspend the current 'Running' task and run the next task in task list.
 pub fn suspend_current_and_run_next() {
@@ -75,7 +75,7 @@ pub fn exit_current_and_run_next(exit_code: i32) {
     let mut inner = task.inner_exclusive_access();
     // Change status to Zombie
     inner.task_status = TaskStatus::Zombie;
-    // Record exit code
+    // Record exit code  此处将退出码写入到进程的进程控制块中
     inner.exit_code = exit_code;
     // do not move to its parent but under initproc
 
@@ -90,7 +90,7 @@ pub fn exit_current_and_run_next(exit_code: i32) {
     // ++++++ release parent PCB
 
     inner.children.clear();
-    // deallocate user space
+    // deallocate user space  地址空间早期回收 只是把应用地址空间的逻辑段清空 物理页帧后续再回收
     inner.memory_set.recycle_data_pages();
     drop(inner);
     // **** release current PCB
