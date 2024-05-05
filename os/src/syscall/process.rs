@@ -1,7 +1,7 @@
 //! Process management syscalls
 use crate::{
-    config::{MAX_SYSCALL_NUM, PAGE_SIZE}, mm::translated_physical_address, task::{
-        change_program_brk, current_user_token, exit_current_and_run_next, get_current_start_time, get_current_taskcontrolblock_status, get_syscall_times, mmap_current_task, munmap_current_task, suspend_current_and_run_next, TaskStatus
+    config::{MAX_SYSCALL_NUM, PAGE_SIZE},task::{
+        change_program_brk, current_tranlated_physical_address, exit_current_and_run_next, get_current_start_time, get_current_taskcontrolblock_status, get_syscall_times, mmap_current_task, munmap_current_task, suspend_current_and_run_next, TaskStatus
     }, timer::get_time_us
 };
 
@@ -43,7 +43,7 @@ pub fn sys_yield() -> isize {
 pub fn sys_get_time(_ts: *mut TimeVal, _tz: usize) -> isize {
     trace!("kernel: sys_get_time");
     let _us = get_time_us();
-    let ts = translated_physical_address(current_user_token(), _ts as *const u8) as *mut TimeVal;
+    let ts = current_tranlated_physical_address(_ts as *const u8 ) as *mut TimeVal;
     unsafe {
         *ts = TimeVal{
             sec:_us / 1_000_000,
@@ -53,14 +53,12 @@ pub fn sys_get_time(_ts: *mut TimeVal, _tz: usize) -> isize {
     0
 }
 
-
-
 /// YOUR JOB: Finish sys_task_info to pass testcases
 /// HINT: You might reimplement it with virtual memory management.
 /// HINT: What if [`TaskInfo`] is splitted by two pages ?
-pub fn sys_task_info(_ti: *mut TaskInfo) -> isize {
+pub fn sys_task_info(ti: *mut TaskInfo) -> isize {
     trace!("kernel: sys_task_info");
-    let _ti = translated_physical_address(current_user_token(), _ti as *const u8) as *mut TaskInfo;
+    let _ti =  current_tranlated_physical_address(ti as *const u8 ) as *mut TaskInfo;
     unsafe{
         *_ti = TaskInfo{
             status : get_current_taskcontrolblock_status(),

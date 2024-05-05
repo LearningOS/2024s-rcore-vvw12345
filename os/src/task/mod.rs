@@ -15,6 +15,7 @@ mod switch;
 mod task;
 
 use crate::loader::{get_app_data, get_num_app};
+use crate::mm::translated_physical_address;
 use crate::sync::UPSafeCell;
 use crate::timer::get_time_us;
 use crate::trap::TrapContext;
@@ -272,6 +273,12 @@ pub fn add_syscall_times(syscall_id:usize){
 pub fn get_syscall_times() -> [u32;500]{
     TASK_MANAGER.get_syscall_times()
 }
+
+/// 为当前任务所在地址空间完成地址翻译
+pub fn current_tranlated_physical_address(ptr:*const u8) -> usize{
+    let token = TASK_MANAGER.get_current_token();
+    translated_physical_address(token, ptr)
+} 
 
 /// 为当前地址空间完成地址映射
 pub fn mmap_current_task(start: usize,len: usize,port: usize) -> isize{
