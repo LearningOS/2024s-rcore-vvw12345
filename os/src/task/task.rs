@@ -1,5 +1,5 @@
 //! Types related to task management & Functions for completely changing TCB
-use super::TaskContext;
+use super::{current_task, TaskContext};
 use super::{kstack_alloc, pid_alloc, KernelStack, PidHandle};
 use crate::config::{MAX_SYSCALL_NUM, TRAP_CONTEXT_BASE};
 use crate::mm::{MemorySet, PhysPageNum, VirtAddr, KERNEL_SPACE};
@@ -172,6 +172,58 @@ impl TaskControlBlock {
         // **** release inner automatically
     }
 
+    /// DIY的spwan方法
+    pub fn spawn(&self,elf_data: &[u8]) -> Arc<Self>{
+        // memory_set with elf program headers/trampoline/trap context/user stack
+        let (memory_set, user_sp, entry_point) = MemorySet::from_elf(elf_data);
+        let trap_cx_ppn = memory_set
+            .translate(VirtAddr::from(TRAP_CONTEXT_BASE).into())
+            .unwrap()
+            .ppn();
+        // 给新进程分配一个进程号 分配内核栈
+        let pid_handle = pid_alloc();
+        let kernel_stack = kstack_alloc();
+        let kernel_stack_top = kernel_stack.get_top();
+
+        // 这里要特别处理一下parent字段 新创建的进程之父为当前正在运行的进程
+        let parent = current_task().unwrap();
+
+        let task_control_block = Arc::new(TaskControlBlock{
+            pid: pid_handle,
+            kernel_stack,
+            inner:unsafe {
+                UPSafeCell::new(TaskControlBlockInner {
+                    trap_cx_ppn,
+                    base_size: user_sp,
+                    task_cx: TaskContext::goto_trap_return(kernel_stack_top),
+                    task_status: TaskStatus::Ready,
+                    memory_set,
+                    parent: Some(Arc::downgrade(&parent)),
+                    children: Vec::new(),
+                    exit_code: 0,
+                    heap_bottom: user_sp,
+                    program_brk: user_sp,
+                    start_time:get_time_us(),
+                    syscall_times:[0;MAX_SYSCALL_NUM]
+                })
+            },
+        });
+        // 这里也是一样 在创建完子进程之后需要维护父进程的孩子列表
+        let mut parent_inner = parent.inner_exclusive_access();
+        parent_inner.children.push(task_control_block.clone());
+
+        // TrapContext的逻辑应该是和exec还有new一样 准备一个全新的才行
+        let trap_cx = task_control_block.inner_exclusive_access().get_trap_cx();
+        *trap_cx = TrapContext::app_init_context(
+            entry_point,
+            user_sp,
+            KERNEL_SPACE.exclusive_access().token(),
+            kernel_stack_top,
+            trap_handler as usize,
+        );
+        task_control_block
+    }
+
     /// parent process fork the child process
     pub fn fork(self: &Arc<Self>) -> Arc<Self> {
         // ---- access parent PCB exclusively
@@ -203,7 +255,8 @@ impl TaskControlBlock {
                     program_brk: parent_inner.program_brk,
                     // fork()的话记得从父进程那里把start_time和syscall_times继承下来
                     // 更新：明显不应该继承 不知道之前怎么想的
-                    start_time:get_time_us() / 1000,
+                    // 这里的time拿到的是微秒 Taskinfo里面会自己除以1000
+                    start_time:get_time_us(),
                     syscall_times:[0;MAX_SYSCALL_NUM]
                 })
             },

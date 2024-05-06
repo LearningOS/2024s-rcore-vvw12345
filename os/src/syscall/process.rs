@@ -62,6 +62,28 @@ pub fn sys_fork() -> isize {
     new_pid as isize
 }
 
+/// YOUR JOB: Implement spawn.
+/// HINT: fork + exec =/= spawn
+/// path参数输入的是希望执行的文件名
+pub fn sys_spawn(path: *const u8) -> isize {
+    trace!(
+        "kernel:pid[{}] sys_spawn",
+        current_task().unwrap().pid.0
+    );
+    let token = current_user_token();
+    let path = translated_str(token, path);
+    // 这里得到的data和sys_exec系统调用是类似的 可以直接作为参数被from_elf方法解析
+    if let Some(data) = get_app_data_by_name(path.as_str()) {
+        let task = current_task().unwrap();
+        let new_task = task.spawn(data);
+        let new_task_pid = new_task.pid.0;
+        add_task(new_task);
+        new_task_pid as isize
+    }else{
+        -1
+    }
+}
+
 pub fn sys_exec(path: *const u8) -> isize {
     trace!("kernel:pid[{}] sys_exec", current_task().unwrap().pid.0);
     let token = current_user_token();
@@ -198,20 +220,12 @@ pub fn sys_sbrk(size: i32) -> isize {
     }
 }
 
-/// YOUR JOB: Implement spawn.
-/// HINT: fork + exec =/= spawn
-pub fn sys_spawn(_path: *const u8) -> isize {
-    trace!(
-        "kernel:pid[{}] sys_spawn NOT IMPLEMENTED",
-        current_task().unwrap().pid.0
-    );
-    -1
-}
+
 
 // YOUR JOB: Set task priority.
 pub fn sys_set_priority(_prio: isize) -> isize {
     trace!(
-        "kernel:pid[{}] sys_set_priority NOT IMPLEMENTED",
+        "kernel:pid[{}] sys_set_priority",
         current_task().unwrap().pid.0
     );
     -1
