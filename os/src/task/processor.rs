@@ -86,6 +86,12 @@ impl Processor {
         let memory_set = &mut current_inner.memory_set;
         memory_set.munmap(start,len)
     }
+
+    /// 改变当前进程的优先级
+    pub fn change_current_priority(&mut self,new_priority:usize) {
+        let mut current_inner = self.current.as_mut().unwrap().inner_exclusive_access();
+        current_inner.priority = new_priority;
+    }
 }
 
 lazy_static! {
@@ -189,4 +195,9 @@ pub fn schedule(switched_task_cx_ptr: *mut TaskContext) {
     unsafe {
         __switch(switched_task_cx_ptr, idle_task_cx_ptr);
     }
+}
+
+/// 改变当前进程的优先级
+pub fn change_current_priority(new_priority:usize){
+    PROCESSOR.exclusive_access().change_current_priority(new_priority);
 }

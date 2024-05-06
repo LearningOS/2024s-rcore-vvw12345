@@ -6,7 +6,7 @@ use crate::{
     loader::get_app_data_by_name,
     mm::{translated_refmut, translated_str},
     task::{
-        add_task, current_task, current_task_start_time, current_task_status, current_task_syscall_times, current_tranlated_physical_address, current_user_token, exit_current_and_run_next, mmap_current_task, munmap_current_task, suspend_current_and_run_next, TaskStatus
+        add_task, change_current_priority, current_task, current_task_start_time, current_task_status, current_task_syscall_times, current_tranlated_physical_address, current_user_token, exit_current_and_run_next, mmap_current_task, munmap_current_task, suspend_current_and_run_next, TaskStatus
     }, timer::get_time_us,
 };
 
@@ -223,10 +223,16 @@ pub fn sys_sbrk(size: i32) -> isize {
 
 
 // YOUR JOB: Set task priority.
-pub fn sys_set_priority(_prio: isize) -> isize {
+// 进程初始的优先级被设定为16 通过该系统调用来完成对特定进程优先级的修改
+pub fn sys_set_priority(prio: isize) -> isize {
     trace!(
         "kernel:pid[{}] sys_set_priority",
         current_task().unwrap().pid.0
     );
-    -1
+    if prio < 2{
+        //进程优先级要求必须大于等于2 设置为1引发错误
+        return -1;
+    }
+    change_current_priority(prio as usize);
+    prio
 }

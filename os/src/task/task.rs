@@ -76,6 +76,12 @@ pub struct TaskControlBlockInner {
 
     /// 系统调用次数
     pub syscall_times:[u32;MAX_SYSCALL_NUM],
+
+    /// 进程优先级
+    pub priority:usize,
+
+    /// 步长调度
+    pub stride:usize,
 }
 
 impl TaskControlBlockInner {
@@ -128,6 +134,9 @@ impl TaskControlBlock {
                     program_brk: user_sp,
                     start_time:0,
                     syscall_times:[0;MAX_SYSCALL_NUM],
+                    //添加进程优先级字段
+                    priority:16,
+                    stride:0,
                 })
             },
         };
@@ -204,7 +213,9 @@ impl TaskControlBlock {
                     heap_bottom: user_sp,
                     program_brk: user_sp,
                     start_time:get_time_us(),
-                    syscall_times:[0;MAX_SYSCALL_NUM]
+                    syscall_times:[0;MAX_SYSCALL_NUM],
+                    priority:16,
+                    stride:0,
                 })
             },
         });
@@ -257,7 +268,11 @@ impl TaskControlBlock {
                     // 更新：明显不应该继承 不知道之前怎么想的
                     // 这里的time拿到的是微秒 Taskinfo里面会自己除以1000
                     start_time:get_time_us(),
-                    syscall_times:[0;MAX_SYSCALL_NUM]
+                    syscall_times:[0;MAX_SYSCALL_NUM],
+                    priority:parent_inner.priority,
+                    // 这里要考虑一个点 就是fork()出来的进程在执行位置上应该和父进程完全相同
+                    // 所以stride计数应该也是一样的
+                    stride:parent_inner.stride,
                 })
             },
         });
