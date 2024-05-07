@@ -22,7 +22,7 @@ mod switch;
 #[allow(rustdoc::private_intra_doc_links)]
 mod task;
 
-use crate::fs::{open_file, OpenFlags};
+use crate::{config::BIG_STRIDE, fs::{open_file, OpenFlags}};
 use alloc::sync::Arc;
 pub use context::TaskContext;
 use lazy_static::*;
@@ -34,7 +34,8 @@ pub use id::{kstack_alloc, pid_alloc, KernelStack, PidHandle};
 pub use manager::add_task;
 pub use processor::{
     current_task, current_trap_cx, current_user_token, run_tasks, schedule, take_current_task,
-    Processor,
+    current_task_start_time,current_task_syscall_times,add_syscall_times,current_task_status,
+    current_tranlated_physical_address,mmap_current_task,munmap_current_task,change_current_priority,Processor,
 };
 /// Suspend the current 'Running' task and run the next task in task list.
 pub fn suspend_current_and_run_next() {
@@ -46,6 +47,8 @@ pub fn suspend_current_and_run_next() {
     let task_cx_ptr = &mut task_inner.task_cx as *mut TaskContext;
     // Change status to Ready
     task_inner.task_status = TaskStatus::Ready;
+    // 进程在被放弃之前需要更新其stride值
+    task_inner.stride = task_inner.stride + BIG_STRIDE / task_inner.priority;
     drop(task_inner);
     // ---- release current PCB
 

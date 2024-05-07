@@ -7,7 +7,9 @@
 use super::__switch;
 use super::{fetch_task, TaskStatus};
 use super::{TaskContext, TaskControlBlock};
+use crate::mm::translated_physical_address;
 use crate::sync::UPSafeCell;
+use crate::timer::get_time_us;
 use crate::trap::TrapContext;
 use alloc::sync::Arc;
 use lazy_static::*;
@@ -44,6 +46,51 @@ impl Processor {
     pub fn current(&self) -> Option<Arc<TaskControlBlock>> {
         self.current.as_ref().map(Arc::clone)
     }
+
+    ///获得当前任务的start time
+    pub fn get_current_tasks_start_time(&self) -> usize{
+        let inner = self.current.as_ref().unwrap().inner_exclusive_access();
+        inner.start_time
+    }
+
+    /// 获得当前任务的系统调用信息
+    pub fn get_syscall_times(&self) -> [u32;500]{
+        let inner = self.current.as_ref().unwrap().inner_exclusive_access();
+        inner.syscall_times
+    }
+
+    /// 获得当前任务状态
+    pub fn get_current_task_status(&self) -> TaskStatus{
+        let inner = self.current.as_ref().unwrap().inner_exclusive_access();
+        inner.task_status
+    }
+
+    /// 添加系统调用
+    pub fn add_current_syscall_times(&mut self,syscall_id:usize){
+        let mut current_inner = self.current.as_mut().unwrap().inner_exclusive_access();
+        current_inner.syscall_times[syscall_id] += 1;
+        //println!("{} + 1\n",syscall_id);
+    }
+
+    /// 为当前地址空间完成映射
+    pub fn mmap_current_task(&mut self,start: usize,len: usize,port: usize) -> isize{
+        let mut current_inner = self.current.as_mut().unwrap().inner_exclusive_access();
+        let memory_set = &mut current_inner.memory_set;
+        memory_set.mmap(start,len,port)
+    }
+
+    /// 为当前地址空间解映射
+    pub fn munmap_current_task(&mut self,start: usize,len: usize) -> isize{
+        let mut current_inner = self.current.as_mut().unwrap().inner_exclusive_access();
+        let memory_set = &mut current_inner.memory_set;
+        memory_set.munmap(start,len)
+    }
+
+    /// 改变当前进程的优先级
+    pub fn change_current_priority(&mut self,new_priority:usize) {
+        let mut current_inner = self.current.as_mut().unwrap().inner_exclusive_access();
+        current_inner.priority = new_priority;
+    }
 }
 
 lazy_static! {
@@ -61,6 +108,9 @@ pub fn run_tasks() {
             let mut task_inner = task.inner_exclusive_access();
             let next_task_cx_ptr = &task_inner.task_cx as *const TaskContext;
             task_inner.task_status = TaskStatus::Running;
+            if task_inner.start_time == 0{
+                task_inner.start_time = get_time_us();
+            }
             // release coming task_inner manually
             drop(task_inner);
             // release coming task TCB manually
@@ -98,6 +148,47 @@ pub fn current_trap_cx() -> &'static mut TrapContext {
         .unwrap()
         .inner_exclusive_access()
         .get_trap_cx()
+}
+
+/// 获取当前任务的时间
+pub fn current_task_start_time() -> usize{
+    PROCESSOR.exclusive_access().get_current_tasks_start_time()
+}
+
+/// 获取当前任务的系统调用次数
+pub fn current_task_syscall_times() -> [u32;500]{
+    PROCESSOR.exclusive_access().get_syscall_times()
+}
+
+/// 发生系统调用 增加一次次数
+pub fn add_syscall_times(syscall_id:usize){
+    PROCESSOR.exclusive_access().add_current_syscall_times(syscall_id);
+}
+
+/// 获得当前任务的任务状态
+pub fn current_task_status() -> TaskStatus{
+    PROCESSOR.exclusive_access().get_current_task_status()
+}
+
+/// 为当前的任务完成地址空间翻译
+pub fn current_tranlated_physical_address(ptr:*const u8) -> usize{
+    let token = current_user_token();
+    translated_physical_address(token,ptr)
+}
+
+/// 为当前的地址空间完成地址映射
+pub fn mmap_current_task(start: usize,len: usize,port: usize) -> isize{
+    PROCESSOR.exclusive_access().mmap_current_task(start, len, port)
+}
+
+/// 为当前地址空间解开地址映射
+pub fn munmap_current_task(start: usize,len: usize) -> isize{
+    PROCESSOR.exclusive_access().munmap_current_task(start, len)
+}
+
+/// 改变当前进程的优先级
+pub fn change_current_priority(new_priority:usize){
+    PROCESSOR.exclusive_access().change_current_priority(new_priority);
 }
 
 ///Return to idle control flow for new scheduling

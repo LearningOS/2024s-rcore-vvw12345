@@ -108,7 +108,7 @@ impl PageTable {
         result
     }
     /// Find PageTableEntry by VirtPageNum
-    fn find_pte(&self, vpn: VirtPageNum) -> Option<&mut PageTableEntry> {
+    pub fn find_pte(&self, vpn: VirtPageNum) -> Option<&mut PageTableEntry> {
         let idxs = vpn.indexes();
         let mut ppn = self.root_ppn;
         let mut result: Option<&mut PageTableEntry> = None;
@@ -275,4 +275,14 @@ impl Iterator for UserBufferIterator {
             Some(r)
         }
     }
+}
+
+/// 虚拟地址到物理地址的转换
+pub fn translated_physical_address(satp: usize,ptr:*const u8) -> usize{
+    let page_table = PageTable::from_token(satp);//首先根据token参数找到对应的应用进程的页表
+    let va = VirtAddr::from(ptr as usize);//将传入的usize生成对应的虚拟地址(只使用较低的39位)
+    //首先根据虚拟地址找到对应的物理页，拿到这个物理页之后调用其ppn()方法得到物理页码
+    let ppn = page_table.find_pte(va.floor()).unwrap().ppn();
+    //物理页码转换为物理基址 + 偏移量 得到特定地址空间下实际的物理页帧位置
+    super::PhysAddr::from(ppn).0 + va.page_offset()
 }

@@ -66,6 +66,59 @@ impl MemorySet {
             None,
         );
     }
+    /// 申请地址空间
+    pub fn mmap(&mut self,start: usize, len: usize, port: usize) -> isize{
+        let  vpnrange = VPNRange::new(VirtAddr::from(start).floor(), VirtAddr::from(start+len).ceil());
+        for vpn in vpnrange{
+            if let Some(pte) = self.page_table.find_pte(vpn){
+                if pte.is_valid(){
+                    //println!("{}\n",pte.is_valid());
+                    //println!("The Page you wanted has been alloced to others\n");
+                    return -1;//已经被分配过
+                }
+            }
+        }
+        //println!("No Page has been alloc\n");
+        // 缺失物理内存空间不足检查的逻辑
+
+        let mut map_prem = MapPermission::U;
+        if (port & 1)!=0{
+            //println!("R\n");
+            map_prem|=MapPermission::R;
+        }
+        if (port & 2)!=0{
+            //println!("W\n");
+            map_prem|=MapPermission::W;
+        }
+        if (port & 4)!=0{
+            //println!("X\n");
+            map_prem|=MapPermission::X;
+        }
+        println!("start_va:{:#x}~end_va:{:#x} map_perm:{:#x}\n",start,start+len,map_prem);
+        self.insert_framed_area(VirtAddr::from(start), VirtAddr::from(start + len), map_prem);
+        0
+    }
+
+    /// 去除地址空间
+    pub fn munmap(&mut self,start: usize,len: usize)->isize{
+        let vpnrange = VPNRange::new(VirtAddr::from(start).floor(), VirtAddr::from(start+len).ceil());
+        // 检查未被映射的虚存 地址空间不可以被重复释放
+        for vpn in vpnrange{
+            let pte = self.page_table.find_pte(vpn);
+            if pte.is_none() || !pte.unwrap().is_valid(){
+                return -1;
+            }
+        }
+        for vpn in vpnrange{
+            for area in &mut self.areas{
+                if vpn < area.vpn_range.get_end() && vpn >= area.vpn_range.get_start(){
+                    area.unmap_one(&mut self.page_table, vpn);
+                }
+            }
+        }
+        0
+    }
+
     /// remove a area
     pub fn remove_area_with_start_vpn(&mut self, start_vpn: VirtPageNum) {
         if let Some((idx, area)) = self

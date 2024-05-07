@@ -1,10 +1,11 @@
 //! Types related to task management & Functions for completely changing TCB
-use super::TaskContext;
+use super::{current_task, TaskContext};
 use super::{kstack_alloc, pid_alloc, KernelStack, PidHandle};
-use crate::config::TRAP_CONTEXT_BASE;
+use crate::config::{MAX_SYSCALL_NUM, TRAP_CONTEXT_BASE};
 use crate::fs::{File, Stdin, Stdout};
 use crate::mm::{MemorySet, PhysPageNum, VirtAddr, KERNEL_SPACE};
 use crate::sync::UPSafeCell;
+use crate::timer::get_time_us;
 use crate::trap::{trap_handler, TrapContext};
 use alloc::sync::{Arc, Weak};
 use alloc::vec;
@@ -71,6 +72,18 @@ pub struct TaskControlBlockInner {
 
     /// Program break
     pub program_brk: usize,
+
+    /// 进程开始时间
+    pub start_time:usize,
+
+    /// 系统调用次数
+    pub syscall_times:[u32;MAX_SYSCALL_NUM],
+
+    /// 进程优先级
+    pub priority:usize,
+
+    /// 步长调度
+    pub stride:usize,
 }
 
 impl TaskControlBlockInner {
@@ -135,6 +148,11 @@ impl TaskControlBlock {
                     ],
                     heap_bottom: user_sp,
                     program_brk: user_sp,
+                    //继承此前实验信息
+                    start_time:0,
+                    syscall_times:[0;MAX_SYSCALL_NUM],
+                    priority:16,
+                    stride:0,
                 })
             },
         };
@@ -216,6 +234,10 @@ impl TaskControlBlock {
                     fd_table: new_fd_table,
                     heap_bottom: parent_inner.heap_bottom,
                     program_brk: parent_inner.program_brk,
+                    start_time:0,
+                    syscall_times:[0;MAX_SYSCALL_NUM],
+                    priority:16,
+                    stride:0,
                 })
             },
         });
@@ -229,6 +251,69 @@ impl TaskControlBlock {
         task_control_block
         // **** release child PCB
         // ---- release parent PCB
+    }
+
+    /// DIY的spwan方法
+    pub fn spawn(&self,elf_data: &[u8]) -> Arc<Self>{
+        // memory_set with elf program headers/trampoline/trap context/user stack
+        let (memory_set, user_sp, entry_point) = MemorySet::from_elf(elf_data);
+        let trap_cx_ppn = memory_set
+            .translate(VirtAddr::from(TRAP_CONTEXT_BASE).into())
+            .unwrap()
+            .ppn();
+        // 给新进程分配一个进程号 分配内核栈
+        let pid_handle = pid_alloc();
+        let kernel_stack = kstack_alloc();
+        let kernel_stack_top = kernel_stack.get_top();
+
+        // 这里要特别处理一下parent字段 新创建的进程之父为当前正在运行的进程
+        let parent = current_task().unwrap();
+
+        let task_control_block = Arc::new(TaskControlBlock{
+            pid: pid_handle,
+            kernel_stack,
+            inner:unsafe {
+                UPSafeCell::new(TaskControlBlockInner {
+                    trap_cx_ppn,
+                    base_size: user_sp,
+                    task_cx: TaskContext::goto_trap_return(kernel_stack_top),
+                    task_status: TaskStatus::Ready,
+                    memory_set,
+                    parent: Some(Arc::downgrade(&parent)),
+                    children: Vec::new(),
+                    // 此处还得细想一下
+                    fd_table: vec![
+                        // 0 -> stdin
+                        Some(Arc::new(Stdin)),
+                        // 1 -> stdout
+                        Some(Arc::new(Stdout)),
+                        // 2 -> stderr
+                        Some(Arc::new(Stdout)),
+                    ],
+                    exit_code: 0,
+                    heap_bottom: user_sp,
+                    program_brk: user_sp,
+                    start_time:get_time_us(),
+                    syscall_times:[0;MAX_SYSCALL_NUM],
+                    priority:16,
+                    stride:0,
+                })
+            },
+        });
+        // 这里也是一样 在创建完子进程之后需要维护父进程的孩子列表
+        let mut parent_inner = parent.inner_exclusive_access();
+        parent_inner.children.push(task_control_block.clone());
+
+        // TrapContext的逻辑应该是和exec还有new一样 准备一个全新的才行
+        let trap_cx = task_control_block.inner_exclusive_access().get_trap_cx();
+        *trap_cx = TrapContext::app_init_context(
+            entry_point,
+            user_sp,
+            KERNEL_SPACE.exclusive_access().token(),
+            kernel_stack_top,
+            trap_handler as usize,
+        );
+        task_control_block
     }
 
     /// get pid of process
