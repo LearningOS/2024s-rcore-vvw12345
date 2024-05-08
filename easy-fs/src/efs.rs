@@ -104,6 +104,7 @@ impl EasyFileSystem {
             })
     }
     /// Get the root inode of the filesystem
+    /// 在这里查询之后再返回 而不是在创建新INode的时候尝试获取整个EasyFlieSystem的锁
     pub fn root_inode(efs: &Arc<Mutex<Self>>) -> Inode {
         let block_device = Arc::clone(&efs.lock().block_device);
         // acquire efs lock temporarily
@@ -111,6 +112,7 @@ impl EasyFileSystem {
         // release efs lock
         Inode::new(block_id, block_offset, Arc::clone(efs), block_device)
     }
+    /// EasyFileSystem持有data/inode两个区域的位图信息和起始点 就可以知道所有位置的信息
     /// Get inode by id
     pub fn get_disk_inode_pos(&self, inode_id: u32) -> (u32, usize) {
         let inode_size = core::mem::size_of::<DiskInode>();
@@ -125,11 +127,13 @@ impl EasyFileSystem {
     pub fn get_data_block_id(&self, data_block_id: u32) -> u32 {
         self.data_area_start_block + data_block_id
     }
+    /// inode区域和数据块区域的回收 本质就是在特定的位图上完成置位
+    /// 但EasyFileSystem可以定位到其读入的任何节点
+    /// 所以可以完成分配回收工作
     /// Allocate a new inode
     pub fn alloc_inode(&mut self) -> u32 {
         self.inode_bitmap.alloc(&self.block_device).unwrap() as u32
     }
-
     /// Allocate a data block
     pub fn alloc_data(&mut self) -> u32 {
         self.data_bitmap.alloc(&self.block_device).unwrap() as u32 + self.data_area_start_block

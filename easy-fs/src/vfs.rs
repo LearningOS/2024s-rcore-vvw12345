@@ -7,7 +7,11 @@ use alloc::sync::Arc;
 use alloc::vec::Vec;
 use spin::{Mutex, MutexGuard};
 /// Virtual filesystem layer over easy-fs
+/// EasyFileSystem数据结构可以对磁盘上任何特定的block完成分配回收
+/// 这些细节往往是对用户屏蔽的
+/// 需要暴露接口给用户 使其能够直接对文件或者目录操作
 pub struct Inode {
+    // 此处的block_id和block_offset和Disknode上的是完全对应的
     block_id: usize,
     block_offset: usize,
     fs: Arc<Mutex<EasyFileSystem>>,

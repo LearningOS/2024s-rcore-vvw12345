@@ -22,6 +22,7 @@ const INDIRECT1_BOUND: usize = DIRECT_BOUND + INODE_INDIRECT1_COUNT;
 const INDIRECT2_BOUND: usize = INDIRECT1_BOUND + INODE_INDIRECT2_COUNT;
 /// Super block of a filesystem
 #[repr(C)]
+// 磁盘上数据结构 存放在磁盘上编号为0的块的起始位置
 pub struct SuperBlock {
     magic: u32,
     pub total_blocks: u32,
@@ -81,7 +82,8 @@ type DataBlock = [u8; BLOCK_SZ];
 /// A disk inode
 #[repr(C)]
 pub struct DiskInode {
-    pub size: u32,
+    pub size: u32, //文件/目录内容的字节数
+    // 直接索引 一级索引 二级索引
     pub direct: [u32; INODE_DIRECT_COUNT],
     pub indirect1: u32,
     pub indirect2: u32,
@@ -111,18 +113,19 @@ impl DiskInode {
     pub fn data_blocks(&self) -> u32 {
         Self::_data_blocks(self.size)
     }
+    // 计算所需的数据块数量 计算方法为size除以每个块的大小并向上取整
     fn _data_blocks(size: u32) -> u32 {
         (size + BLOCK_SZ as u32 - 1) / BLOCK_SZ as u32
     }
     /// Return number of blocks needed include indirect1/2.
     pub fn total_blocks(size: u32) -> u32 {
-        let data_blocks = Self::_data_blocks(size) as usize;
+        let data_blocks = Self::_data_blocks(size) as usize;//先算出需要多少数据块
         let mut total = data_blocks as usize;
-        // indirect1
+        // indirect1  直接索引不够用了 需要一个一级索引块
         if data_blocks > INODE_DIRECT_COUNT {
             total += 1;
         }
-        // indirect2
+        // indirect2 
         if data_blocks > INDIRECT1_BOUND {
             total += 1;
             // sub indirect1
@@ -391,7 +394,7 @@ impl DiskInode {
 /// A directory entry
 #[repr(C)]
 pub struct DirEntry {
-    name: [u8; NAME_LENGTH_LIMIT + 1],
+    name: [u8; NAME_LENGTH_LIMIT + 1],//ASCII编码 最大长度27位的文件名
     inode_id: u32,
 }
 /// Size of a directory entry

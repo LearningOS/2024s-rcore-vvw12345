@@ -7,7 +7,7 @@ use spin::Mutex;
 pub struct BlockCache {
     /// cached block data
     cache: [u8; BLOCK_SZ],
-    /// underlying block id
+    /// underlying block id  对于一个特定的磁盘块 其block_id是固定的
     block_id: usize,
     /// underlying block device
     block_device: Arc<dyn BlockDevice>,
@@ -61,6 +61,8 @@ impl BlockCache {
         f(self.get_mut(offset))
     }
 
+    /// 检测是否需要将修改回写到磁盘
+    /// 在Linux中 通常有一个后台进程定期将缓冲区内容回写到磁盘
     pub fn sync(&mut self) {
         if self.modified {
             self.modified = false;
@@ -94,11 +96,11 @@ impl BlockCacheManager {
         block_device: Arc<dyn BlockDevice>,
     ) -> Arc<Mutex<BlockCache>> {
         if let Some(pair) = self.queue.iter().find(|pair| pair.0 == block_id) {
-            Arc::clone(&pair.1)
+            Arc::clone(&pair.1) //找到对应目标 复制一份应用并返回
         } else {
             // substitute
             if self.queue.len() == BLOCK_CACHE_SIZE {
-                // from front to tail
+                // from front to tail  强引用计数大于1代表除了BlockCacheManager之外 还有其他副本在使用
                 if let Some((idx, _)) = self
                     .queue
                     .iter()

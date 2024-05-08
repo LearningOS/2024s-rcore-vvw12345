@@ -27,6 +27,8 @@ impl Bitmap {
     }
     /// Allocate a new block from a block device
     pub fn alloc(&self, block_device: &Arc<dyn BlockDevice>) -> Option<usize> {
+        // BITMAPS区域内部有blocks_id(代表其各个块的顺序)
+        // get_block_cache()传入的参数应该是该区域的起始位置 + blocks_id 才可以定位到该磁盘上真实的块
         for block_id in 0..self.blocks {
             let pos = get_block_cache(
                 block_id + self.start_block_id as usize,
