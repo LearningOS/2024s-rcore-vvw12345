@@ -18,8 +18,10 @@ use lazy_static::*;
 /// A wrapper around a filesystem inode
 /// to implement File trait atop
 pub struct OSInode {
+    // 访问权限控制 决定了其是否可以被sys_read和sys_write读取和写入
     readable: bool,
     writable: bool,
+    // 进程在读取文件时需要维护偏移量以及Inode的变化
     inner: UPSafeCell<OSInodeInner>,
 }
 /// The OS inode inner in 'UPSafeCell'
@@ -124,6 +126,7 @@ pub fn open_file(name: &str, flags: OpenFlags) -> Option<Arc<OSInode>> {
     }
 }
 
+// OSInode也需要被放到进程描述符表里面 需要为其实现File特征
 impl File for OSInode {
     fn readable(&self) -> bool {
         self.readable

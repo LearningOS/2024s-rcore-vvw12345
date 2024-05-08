@@ -81,6 +81,8 @@ type IndirectBlock = [u32; BLOCK_SZ / 4];
 type DataBlock = [u8; BLOCK_SZ];
 /// A disk inode
 #[repr(C)]
+// DiskNode只是一个索引号 其有两种文件类型 File和Directory
+// 其保存的索引指向保存它内容的数据块
 pub struct DiskInode {
     pub size: u32, //文件/目录内容的字节数
     // 直接索引 一级索引 二级索引
@@ -318,19 +320,20 @@ impl DiskInode {
         buf: &mut [u8],
         block_device: &Arc<dyn BlockDevice>,
     ) -> usize {
-        let mut start = offset;
+        let mut start = offset;//offset是一个偏移量 从磁盘的当下偏移量开始读入
         let end = (offset + buf.len()).min(self.size as usize);
         if start >= end {
             return 0;
         }
         let mut start_block = start / BLOCK_SZ;
-        let mut read_size = 0usize;
+        let mut read_size = 0usize;//记录已经读入的字节数
         loop {
             // calculate end of current block
+            //本次读入最多应该读到哪个位置 完整读入一个块或者读到没有为止
             let mut end_current_block = (start / BLOCK_SZ + 1) * BLOCK_SZ;
             end_current_block = end_current_block.min(end);
             // read and update read size
-            let block_read_size = end_current_block - start;
+            let block_read_size = end_current_block - start;//本次读入实际读入的字节数
             let dst = &mut buf[read_size..read_size + block_read_size];
             get_block_cache(
                 self.get_block_id(start_block as u32, block_device) as usize,

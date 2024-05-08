@@ -49,14 +49,16 @@ impl Inode {
     fn find_inode_id(&self, name: &str, disk_inode: &DiskInode) -> Option<u32> {
         // assert it is a directory
         assert!(disk_inode.is_dir());
+        //访问对应DiskNode获取其所含文件/目录内容的字节数
+        //一个目录的大小被限定为DIRENT_SZ 除法得到目录数量
         let file_count = (disk_inode.size as usize) / DIRENT_SZ;
         let mut dirent = DirEntry::empty();
         for i in 0..file_count {
-            assert_eq!(
+            assert_eq!(//for循环不断读入 每次读入一个目录大小的数据 offset参数的增量是DIRENT_SZ
                 disk_inode.read_at(DIRENT_SZ * i, dirent.as_bytes_mut(), &self.block_device,),
-                DIRENT_SZ,
+                DIRENT_SZ,//所以只要是正常目录大小都是符合的 这个断言就不会有错 读完之后再往下读大小就不对了
             );
-            if dirent.name() == name {
+            if dirent.name() == name { //读到目录之后取出名字来比对
                 return Some(dirent.inode_id() as u32);
             }
         }
@@ -107,7 +109,7 @@ impl Inode {
             return None;
         }
         // create a new file
-        // alloc a inode with an indirect block
+        // alloc a inode with an indirect block 分配一个索引节点
         let new_inode_id = fs.alloc_inode();
         // initialize inode
         let (new_inode_block_id, new_inode_block_offset) = fs.get_disk_inode_pos(new_inode_id);
@@ -143,6 +145,7 @@ impl Inode {
         // release efs lock automatically by compiler
     }
     /// List inodes under current inode
+    /// 和find_inode_id的逻辑基本一致 区别在于每次正常读入的文件放到一个向量中返回回去 从而可以列出全部文件
     pub fn ls(&self) -> Vec<String> {
         let _fs = self.fs.lock();
         self.read_disk_inode(|disk_inode| {

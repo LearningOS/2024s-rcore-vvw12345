@@ -9,6 +9,9 @@ const BLOCK_SZ: usize = 512;
 
 struct BlockFile(Mutex<File>);
 
+/// 对于文件系统的使用者而言 只需要提供一个实现了BlockDevice的块设备即可
+/// 这个块设备就可以和我们手写的Inode特征交互 从而和EasyFileSystem等等交互
+/// 进一步和底层的BitMap DiskNode交互
 impl BlockDevice for BlockFile {
     fn read_block(&self, block_id: usize, buf: &mut [u8]) {
         let mut file = self.0.lock().unwrap();
@@ -29,6 +32,8 @@ fn main() {
     easy_fs_pack().expect("Error when packing easy-fs!");
 }
 
+/// 将应用打包成easy-fs镜像
+/// 执行应用的时候只需从文件系统中取出ELF执行文件格式的应用并加载到内存中执行
 fn easy_fs_pack() -> std::io::Result<()> {
     let matches = App::new("EasyFileSystem packer")
         .arg(
@@ -89,6 +94,7 @@ fn easy_fs_pack() -> std::io::Result<()> {
 
 #[test]
 fn efs_test() -> std::io::Result<()> {
+    // 调库 创建一个虚拟块设备
     let block_file = Arc::new(BlockFile(Mutex::new({
         let f = OpenOptions::new()
             .read(true)
@@ -98,8 +104,11 @@ fn efs_test() -> std::io::Result<()> {
         f.set_len(8192 * 512).unwrap();
         f
     })));
+    // 在虚拟块设备上初始化文件系统easy-fs
     EasyFileSystem::create(block_file.clone(), 4096, 1);
+    // 在块设备上打开文件系统
     let efs = EasyFileSystem::open(block_file.clone());
+    // 获取根目录的Inode
     let root_inode = EasyFileSystem::root_inode(&efs);
     root_inode.create("filea");
     root_inode.create("fileb");
