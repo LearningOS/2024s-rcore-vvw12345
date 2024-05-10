@@ -1,5 +1,7 @@
 //! Process management syscalls
 //!
+
+
 use alloc::sync::Arc;
 
 use crate::{
@@ -59,6 +61,39 @@ pub fn sys_fork() -> isize {
     // add new task to scheduler
     add_task(new_task);
     new_pid as isize
+}
+
+/// ch6里面获取文件名应该是通过打开文件来的 要经过open系统调用
+/// YOUR JOB: Implement spawn.
+/// HINT: fork + exec =/= spawn
+pub fn sys_spawn(path: *const u8) -> isize {
+    trace!(
+        "kernel:pid[{}] sys_spawn",
+        current_task().unwrap().pid.0
+    );
+    let token = current_user_token();
+    let path = translated_str(token, path);
+    // 这里得到的data和sys_exec系统调用是类似的 可以直接作为参数被from_elf方法解析
+    // 和ch5的区别主要就是在获得程序数据的方式 ch6是先通过名字去找到对应的文件 再用read_all()方法来读数据
+    if let Some(app_inode) = open_file(path.as_str(), OpenFlags::RDONLY){
+        let task = current_task().unwrap();
+        let data = app_inode.read_all();
+        let new_task = task.spawn(data.as_slice());
+        let new_task_pid = new_task.pid.0;
+        add_task(new_task);
+        new_task_pid as isize
+    }else {
+        -1
+    }
+    // if let Some(data) = get_app_data_by_name(path.as_str()) {
+    //     let task = current_task().unwrap();
+    //     let new_task = task.spawn(data);
+    //     let new_task_pid = new_task.pid.0;
+    //     add_task(new_task);
+    //     new_task_pid as isize
+    // }else{
+    //     -1
+    // }
 }
 
 pub fn sys_exec(path: *const u8) -> isize {
@@ -198,28 +233,6 @@ pub fn sys_sbrk(size: i32) -> isize {
     }
 }
 
-/// ch6里面获取文件名应该是通过打开文件来的 要经过open系统调用
-/// YOUR JOB: Implement spawn.
-/// HINT: fork + exec =/= spawn
-pub fn sys_spawn(_path: *const u8) -> isize {
-    trace!(
-        "kernel:pid[{}] sys_spawn",
-        current_task().unwrap().pid.0
-    );
-    // let token = current_user_token();
-    // let path = translated_str(token, path);
-    // // 这里得到的data和sys_exec系统调用是类似的 可以直接作为参数被from_elf方法解析
-    // if let Some(data) = get_app_data_by_name(path.as_str()) {
-    //     let task = current_task().unwrap();
-    //     let new_task = task.spawn(data);
-    //     let new_task_pid = new_task.pid.0;
-    //     add_task(new_task);
-    //     new_task_pid as isize
-    // }else{
-    //     -1
-    // }
-    -1
-}
 
 // YOUR JOB: Set task priority.
 pub fn sys_set_priority(prio: isize) -> isize {

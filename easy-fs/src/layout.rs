@@ -25,10 +25,15 @@ const INDIRECT2_BOUND: usize = INDIRECT1_BOUND + INODE_INDIRECT2_COUNT;
 // 磁盘上数据结构 存放在磁盘上编号为0的块的起始位置
 pub struct SuperBlock {
     magic: u32,
+    /// 总共的数据块数量
     pub total_blocks: u32,
+    /// 索引位图的数据块数量
     pub inode_bitmap_blocks: u32,
+    /// 索引区域的数据块数量
     pub inode_area_blocks: u32,
+    ///
     pub data_bitmap_blocks: u32,
+    ///
     pub data_area_blocks: u32,
 }
 
@@ -71,7 +76,9 @@ impl SuperBlock {
 /// Type of a disk inode
 #[derive(PartialEq)]
 pub enum DiskInodeType {
+    ///
     File,
+    ///
     Directory,
 }
 
@@ -84,12 +91,18 @@ type DataBlock = [u8; BLOCK_SZ];
 // DiskNode只是一个索引号 其有两种文件类型 File和Directory
 // 其保存的索引指向保存它内容的数据块
 pub struct DiskInode {
-    pub size: u32, //文件/目录内容的字节数
-    // 直接索引 一级索引 二级索引
+    /// 文件/目录内容的字节数
+    pub size: u32, 
+    /// 直接索引  
     pub direct: [u32; INODE_DIRECT_COUNT],
+    /// 一级索引
     pub indirect1: u32,
+    /// 二级索引
     pub indirect2: u32,
-    type_: DiskInodeType,
+    /// 文件/目录/输入输出
+    pub type_: DiskInodeType,
+    /// 硬链接字段
+    pub nlink:u32,
 }
 
 impl DiskInode {
@@ -100,6 +113,7 @@ impl DiskInode {
         self.direct.iter_mut().for_each(|v| *v = 0);
         self.indirect1 = 0;
         self.indirect2 = 0;
+        self.nlink = 1;
         self.type_ = type_;
     }
     /// Whether this inode is a directory
@@ -394,6 +408,7 @@ impl DiskInode {
         write_size
     }
 }
+
 /// A directory entry
 #[repr(C)]
 pub struct DirEntry {
@@ -438,3 +453,4 @@ impl DirEntry {
         self.inode_id
     }
 }
+

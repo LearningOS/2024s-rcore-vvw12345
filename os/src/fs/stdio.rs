@@ -1,5 +1,5 @@
 //!Stdin & Stdout
-use super::File;
+use super::{File, Stat, StatMode};
 use crate::mm::UserBuffer;
 use crate::sbi::console_getchar;
 use crate::task::suspend_current_and_run_next;
@@ -39,6 +39,14 @@ impl File for Stdin {
     fn write(&self, _user_buf: UserBuffer) -> usize {
         panic!("Cannot write to stdin!");
     }
+    fn stat(&self, st: &mut Stat) -> isize {
+        st.dev = 0;  // 设备号可以为0或其他特定值
+        st.ino = 0;  // inode 号通常为0，因为不对应实际文件
+        st.mode = StatMode::CHAR_DEVICE;  // 设置为字符设备
+        st.nlink = 1;  // 通常设置为1
+        st.pad = [0; 7];  // 清零填充
+        0  // 成功返回0
+    }
 }
 
 impl File for Stdout {
@@ -56,5 +64,13 @@ impl File for Stdout {
             print!("{}", core::str::from_utf8(*buffer).unwrap());
         }
         user_buf.len()
+    }
+    fn stat(&self, st: &mut Stat) -> isize {
+        st.dev = 0;  // 设备号可以为0或其他特定值
+        st.ino = 0;  // inode 号通常为0，因为不对应实际文件
+        st.mode = StatMode::CHAR_DEVICE;  // 设置为字符设备
+        st.nlink = 1;  // 通常设置为1
+        st.pad = [0; 7];  // 清零填充
+        0  // 成功返回0
     }
 }

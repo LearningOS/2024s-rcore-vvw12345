@@ -15,7 +15,10 @@ pub trait File: Send + Sync {
     fn read(&self, buf: UserBuffer) -> usize;
     /// write to the file from buf, return the number of bytes written
     fn write(&self, buf: UserBuffer) -> usize;
+    /// stat the file
+    fn stat(&self, st: &mut Stat) -> isize;
 }
+
 
 /// The stat of a inode
 #[repr(C)]
@@ -43,8 +46,10 @@ bitflags! {
         const DIR   = 0o040000;
         /// ordinary regular file
         const FILE  = 0o100000;
+        /// 字符设备
+        const CHAR_DEVICE = 0o020000;
     }
 }
 
-pub use inode::{list_apps, open_file, OSInode, OpenFlags};
+pub use inode::{list_apps, open_file, link_file,unlink_file,OSInode, OpenFlags};
 pub use stdio::{Stdin, Stdout};
