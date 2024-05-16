@@ -7,6 +7,7 @@
 use super::__switch;
 use super::{fetch_task, TaskStatus};
 use super::{ProcessControlBlock, TaskContext, TaskControlBlock};
+use crate::mm::translated_physical_address;
 use crate::sync::UPSafeCell;
 use crate::trap::TrapContext;
 use alloc::sync::Arc;
@@ -41,6 +42,13 @@ impl Processor {
     ///Get current task in cloning semanteme
     pub fn current(&self) -> Option<Arc<TaskControlBlock>> {
         self.current.as_ref().map(Arc::clone)
+    }
+
+    /// 获得当前任务的起始时间
+    pub fn get_current_tasks_start_time(&self) -> usize{
+        let current_process = self.current.as_ref().unwrap().process.upgrade().unwrap();
+        let inner = current_process.inner_exclusive_access();
+        inner.start_time
     }
 }
 
@@ -117,6 +125,17 @@ pub fn current_trap_cx_user_va() -> usize {
 /// get the top addr of kernel stack
 pub fn current_kstack_top() -> usize {
     current_task().unwrap().kstack.get_top()
+}
+
+/// 获取当前任务的时间
+pub fn current_task_start_time() -> usize{
+    PROCESSOR.exclusive_access().get_current_tasks_start_time()
+}
+
+/// 为当前的任务完成地址空间翻译
+pub fn current_tranlated_physical_address(ptr:*const u8) -> usize{
+    let token = current_user_token();
+    translated_physical_address(token,ptr)
 }
 
 /// Return to idle control flow for new scheduling

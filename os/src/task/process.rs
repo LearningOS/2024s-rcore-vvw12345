@@ -5,6 +5,7 @@ use super::manager::insert_into_pid2process;
 use super::TaskControlBlock;
 use super::{add_task, SignalFlags};
 use super::{pid_alloc, PidHandle};
+use crate::config::{MAX_RESOURCES, MAX_THREADS};
 use crate::fs::{File, Stdin, Stdout};
 use crate::mm::{translated_refmut, MemorySet, KERNEL_SPACE};
 use crate::sync::{Condvar, Mutex, Semaphore, UPSafeCell};
@@ -49,6 +50,16 @@ pub struct ProcessControlBlockInner {
     pub semaphore_list: Vec<Option<Arc<Semaphore>>>,
     /// condvar list
     pub condvar_list: Vec<Option<Arc<Condvar>>>,
+    /// 起始时间
+    pub start_time:usize,
+    /// 死锁检测状态字段  
+    /// 为true表示启用死锁检测 false表示关闭死锁检测
+    pub deadlock_detection_enabled:bool,
+    pub mutex_alloc: Vec<Option<usize>>,   // [mutex_id] -> tid，用来表示各个锁的分配情况
+    pub mutex_request: Vec<Option<usize>>, // [tid] -> mutex_id，用来表示各个线程对锁的请求情况
+    pub sem_avail: Vec<usize>,           // [mid] -> num，表示各个信号量的可用数量
+    pub sem_alloc: Vec<Vec<usize>>,      // [tid] -> {sid, num}，用来表示各个信号量给每个线程的分配情况
+    pub sem_request: Vec<Option<usize>>, // [tid] -> sid，表示各个线程对信号量的请求情况
 }
 
 impl ProcessControlBlockInner {
@@ -119,6 +130,15 @@ impl ProcessControlBlock {
                     mutex_list: Vec::new(),
                     semaphore_list: Vec::new(),
                     condvar_list: Vec::new(),
+                    start_time:0,
+                    deadlock_detection_enabled:false,
+                    // 死锁分配情况,死锁请求情况
+                    // 信号量的分配情况,请求情况和剩余情况
+                    mutex_alloc:vec![None; MAX_THREADS],
+                    mutex_request:vec![None; MAX_THREADS],
+                    sem_alloc: vec![vec![0; MAX_RESOURCES]; MAX_THREADS],
+                    sem_avail:vec![MAX_THREADS;MAX_RESOURCES],
+                    sem_request:vec![None; MAX_THREADS],//每个线程都需要被匹配到 所以是MAX_THREADS
                 })
             },
         });
@@ -245,6 +265,13 @@ impl ProcessControlBlock {
                     mutex_list: Vec::new(),
                     semaphore_list: Vec::new(),
                     condvar_list: Vec::new(),
+                    start_time:0,
+                    deadlock_detection_enabled:false,
+                    mutex_alloc:vec![None; MAX_THREADS],
+                    mutex_request:vec![None; MAX_THREADS],
+                    sem_alloc: vec![vec![0; MAX_RESOURCES]; MAX_THREADS],
+                    sem_avail:vec![MAX_THREADS;MAX_RESOURCES],
+                    sem_request:vec![None; MAX_THREADS],
                 })
             },
         });
