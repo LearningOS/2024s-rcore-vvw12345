@@ -8,8 +8,6 @@ use crate::sync::UPSafeCell;
 use alloc::collections::{BTreeMap, VecDeque};
 use alloc::sync::Arc;
 use lazy_static::*;
-
-/// 线程管理器
 ///A array of `TaskControlBlock` that is thread-safe
 pub struct TaskManager {
     ready_queue: VecDeque<Arc<TaskControlBlock>>,
@@ -36,17 +34,12 @@ impl TaskManager {
         self.ready_queue.pop_front()
     }
     pub fn remove(&mut self, task: Arc<TaskControlBlock>) {
-        if let Some((id, t_task)) = self
+        if let Some((id, _)) = self
             .ready_queue
             .iter()
             .enumerate()
             .find(|(_, t)| Arc::as_ptr(t) == Arc::as_ptr(&task))
         {
-            let tid = t_task.inner_exclusive_access().res.as_ref().unwrap().tid;
-            let process = task.process.upgrade().unwrap();
-            let mut process_inner = process.inner_exclusive_access();
-            process_inner.mutex_locker.finish(tid);
-            process_inner.semaphore_locker.finish(tid);
             self.ready_queue.remove(id);
         }
     }

@@ -7,7 +7,6 @@ use crate::{mm::PhysPageNum, sync::UPSafeCell};
 use alloc::sync::{Arc, Weak};
 use core::cell::RefMut;
 
-/// 线程控制块 TCB
 /// Task control block structure
 pub struct TaskControlBlock {
     /// immutable

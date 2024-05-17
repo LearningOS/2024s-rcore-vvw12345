@@ -51,6 +51,8 @@ pub struct ProcessControlBlockInner {
     pub condvar_list: Vec<Option<Arc<Condvar>>>,
     /// deadlock_detect_enabled
     pub deadlock_detect_enabled: bool,
+    ///起始时间
+    pub start_time:usize,
     /// mutex死锁检测
     pub mutex_locker: ProcessLock,
     /// semaphore死锁检测
@@ -122,6 +124,7 @@ impl ProcessControlBlock {
                     signals: SignalFlags::empty(),
                     tasks: Vec::new(),
                     task_res_allocator: RecycleAllocator::new(),
+                    start_time:0,
                     mutex_list: Vec::new(),
                     semaphore_list: Vec::new(),
                     condvar_list: Vec::new(),
@@ -253,6 +256,7 @@ impl ProcessControlBlock {
                     signals: SignalFlags::empty(),
                     tasks: Vec::new(),
                     task_res_allocator: RecycleAllocator::new(),
+                    start_time:0,
                     mutex_list: Vec::new(),
                     semaphore_list: Vec::new(),
                     condvar_list: Vec::new(),
