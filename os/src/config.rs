@@ -24,5 +24,5 @@ pub const TRAP_CONTEXT_BASE: usize = TRAMPOLINE - PAGE_SIZE;
 pub use crate::board::{CLOCK_FREQ, MMIO};
 /// 线程的总数
 pub const MAX_THREADS:usize = 20;
-/// 各类资源的总数
+/// 最多有多少种资源
 pub const MAX_RESOURCES:usize = 10;

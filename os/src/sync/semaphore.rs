@@ -30,15 +30,18 @@ impl Semaphore {
     }
 
     /// up operation of semaphore
-    pub fn up(&self) {
+    pub fn up(&self) -> isize{
         trace!("kernel: Semaphore::up");
         let mut inner = self.inner.exclusive_access();
         inner.count += 1;
         if inner.count <= 0 {
             if let Some(task) = inner.wait_queue.pop_front() {
-                wakeup_task(task);
+                wakeup_task(task.clone());
+                let tid = task.inner_exclusive_access().res.as_ref().unwrap().tid;
+                return tid as isize;
             }
         }
+        return -1;
     }
 
     /// down operation of semaphore
